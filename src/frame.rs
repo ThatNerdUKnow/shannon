@@ -5,6 +5,7 @@ use thiserror::Error;
 
 pub struct Frame<'a> {
     n_bytes: u16,
+    target_user_id: u64,
     body: &'a [u8],
     crc32: u32,
 }
@@ -24,6 +25,7 @@ impl<'a> TryFrom<Frame<'a>> for Vec<u8> {
         let body_n_bytes:u16 = frame.n_bytes as u16;
         let bytes_required = size_of::<u8>() // soh
             + size_of::<u16>() // size
+            + size_of::<u64>()
             + size_of::<u8>() // stx
             + body_n_bytes as usize // body
             + size_of::<u32>() // crc
@@ -33,6 +35,7 @@ impl<'a> TryFrom<Frame<'a>> for Vec<u8> {
         
         data.write(&[AsciiChar::SOH as u8])?;
         data.write(&body_n_bytes.to_be_bytes())?;
+        data.write(&frame.target_user_id.to_be_bytes())?;
         data.write(&[AsciiChar::SOX as u8])?;
         data.write(frame.body)?;
         data.write(&frame.crc32.to_be_bytes())?;
