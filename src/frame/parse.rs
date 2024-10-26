@@ -39,7 +39,7 @@ pub fn frame_header(input: &[u8]) -> IResult<&[u8], FrameHeader> {
         sequence,
         ascii_char(AsciiChar::SOX),
     )(input)?;
-    let header = FrameHeader::new(n_bytes, user_id);
+    let header = FrameHeader::new_unchecked(n_bytes, user_id);
     Ok((remaining, header))
 }
 
@@ -70,4 +70,9 @@ pub fn frame(input: &[u8]) -> IResult<&[u8],Frame>{
     let body_parser = combinator::flat_map(frame_header, frame_body);
     let (remaining,(header,body)) = tuple((frame_header,body_parser))(input)?;
     Ok((remaining,Frame::new_unchecked(header, body)))
+}
+
+#[cfg(test)]
+mod test{
+
 }

@@ -13,13 +13,17 @@ pub struct Frame<'a> {
                          //crc32: u32,
 }
 
-impl<'a> Frame<'a>{
+impl<'a> Frame<'a> {
     /// Creates new [`Frame`] but does not verify that [`FrameHeader`] indicates correct number of bytes in the body
     /// or [`FrameBody`] has appropriate crc32 value
-    pub fn new_unchecked(header:FrameHeader, body:FrameBody)->Frame<'_>{
-        Frame{
-            header,body
-        }
+    pub fn new_unchecked(header: FrameHeader, body: FrameBody) -> Frame<'_> {
+        Frame { header, body }
+    }
+
+    pub fn new(data: &[u8], user_id: u64) -> Result<Frame<'_>, FrameError> {
+        let header = FrameHeader::new(data, user_id)?;
+        let body = FrameBody::new(data);
+        Ok(Frame { header, body })
     }
 }
 
@@ -50,17 +54,24 @@ impl FrameBody<'_> {
     }
 
     /// Creates new [`FrameBody`] and automatically calculates crc32 value
-    pub fn new(data:&[u8])->FrameBody{
+    pub fn new(data: &[u8]) -> FrameBody {
         let crc = const_crc32::crc32(data);
         FrameBody::new_unchecked(data, crc)
     }
 }
 
 impl FrameHeader {
-    pub fn new(n_bytes: u16, user_id: u64) -> FrameHeader {
+    pub fn new_unchecked(n_bytes: u16, user_id: u64) -> FrameHeader {
         FrameHeader {
             n_bytes,
             target_user_id: user_id,
+        }
+    }
+
+    pub fn new(data: &[u8], user_id: u64) -> Result<FrameHeader, FrameError> {
+        match data.len() > u16::MAX.into() {
+            true => Err(FrameError::BodySize(data.len())),
+            false => Ok(FrameHeader::new_unchecked(data.len() as u16, user_id)),
         }
     }
 }
@@ -71,6 +82,8 @@ pub enum FrameError {
     IO(#[from] io::Error),
     #[error("CRC32 Mismatch. Calculated {0} but got {1}")]
     Crc32(u32, u32),
+    #[error("Body size is too big. u16::MAX < {0}")]
+    BodySize(usize),
 }
 
 impl<'a> TryFrom<Frame<'a>> for Vec<u8> {
