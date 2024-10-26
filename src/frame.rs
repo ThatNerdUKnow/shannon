@@ -6,7 +6,7 @@ use std::{
 use thiserror::Error;
 pub mod parse;
 
-#[derive(Clone,PartialEq,Debug)]
+#[derive(Clone, PartialEq, Debug)]
 pub struct Frame<'a> {
     //n_bytes: u16,
     //target_user_id: u64,
@@ -14,7 +14,6 @@ pub struct Frame<'a> {
     body: FrameBody<'a>, //body: &'a [u8],
                          //crc32: u32,
 }
-
 
 impl<'a> Frame<'a> {
     /// Creates new [`Frame`] but does not verify that [`FrameHeader`] indicates correct number of bytes in the body
@@ -28,15 +27,27 @@ impl<'a> Frame<'a> {
         let body = FrameBody::new(data);
         Ok(Frame { header, body })
     }
+
+    fn bytes_required(&self) -> usize {
+        let body_n_bytes: u16 = self.header.n_bytes as u16;
+        let bytes_required = size_of::<u8>() // soh
+            + size_of::<u16>() // size
+            + size_of::<u64>()
+            + size_of::<u8>() // stx
+            + body_n_bytes as usize // body
+            + size_of::<u32>() // crc
+            + size_of::<u8>(); // etx
+        return bytes_required;
+    }
 }
 
-#[derive(Clone,PartialEq,Debug)]
+#[derive(Clone, PartialEq, Debug)]
 pub struct FrameHeader {
     n_bytes: u16,
     target_user_id: u64,
 }
 
-#[derive(Clone,PartialEq,Debug)]
+#[derive(Clone, PartialEq, Debug)]
 pub struct FrameBody<'a> {
     body: &'a [u8],
     crc32: u32,
@@ -95,46 +106,41 @@ impl<'a> TryFrom<Frame<'a>> for Vec<u8> {
     type Error = FrameError;
 
     fn try_from(frame: Frame<'a>) -> Result<Self, Self::Error> {
-        let body_n_bytes: u16 = frame.header.n_bytes as u16;
-        //let bytes_required = size_of::<u8>() // soh
-        //    + size_of::<u16>() // size
-        //    + size_of::<u64>()
-        //    + size_of::<u8>() // stx
-        //    + body_n_bytes as usize // body
-        //    + size_of::<u32>() // crc
-        //    + size_of::<u8>(); // etx
+        let bytes_required = frame.bytes_required();
 
-        let mut data: Vec<u8> = vec![0; 0];
+        let mut data = vec![0; 0];
 
-        data.write(&[AsciiChar::SOH as u8])?;
-        data.write(&body_n_bytes.to_be_bytes())?;
-        data.write(&frame.header.target_user_id.to_be_bytes())?;
-        data.write(&[AsciiChar::SOX as u8])?;
-        data.write(frame.body.body)?;
-        data.write(&frame.body.crc32.to_be_bytes())?;
-        data.write(&[AsciiChar::ETX as u8])?;
+        data.write_all(&[AsciiChar::SOH as u8])?;
+        data.write_all(&frame.header.n_bytes.to_be_bytes())?;
+        data.write_all(&frame.header.target_user_id.to_be_bytes())?;
+        data.write_all(&[AsciiChar::SOX as u8])?;
+        data.write_all(frame.body.body)?;
+        data.write_all(&frame.body.crc32.to_be_bytes())?;
+        data.write_all(&[AsciiChar::ETX as u8])?;
         Ok(data)
     }
 }
 
 #[cfg(test)]
-mod test{
+mod test {
     use super::Frame;
 
     #[test]
-    fn new_frame(){
-        Frame::new(&[0;64], 0).expect("Could not build frame");
+    fn new_frame() {
+        Frame::new(&[0; 64], 0).expect("Could not build frame");
     }
 
     #[test]
-    fn frame_to_bytes(){
-        let frame = Frame::new(&[0;64], 0).expect("Could not build frame");
-        let _:Vec<u8> = frame.try_into().expect("Could not serialize frame");
+    fn frame_to_bytes() {
+        let frame = Frame::new(&[0; 64], 0).expect("Could not build frame");
+        let v: Vec<u8> = frame.clone().try_into().expect("Could not serialize frame");
+        println!("Written bytes length does not match expected");
+        assert_eq!(v.len(),frame.bytes_required());
     }
 
     #[test]
-    fn reject_body_too_big(){
-        let res = Frame::new(&[0;u16::MAX as usize + 1], 0);
+    fn reject_body_too_big() {
+        let res = Frame::new(&[0; u16::MAX as usize + 1], 0);
         assert!(res.is_err())
     }
 }
