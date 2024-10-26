@@ -1,3 +1,5 @@
+use std::rc::Rc;
+
 use ascii::AsciiChar;
 use ascii::ToAsciiChar;
 use log::error;
@@ -6,6 +8,7 @@ use nom::combinator;
 use nom::error::ErrorKind;
 use nom::number;
 use nom::sequence;
+use nom::sequence::terminated;
 use nom::sequence::tuple;
 use nom::IResult;
 
@@ -42,7 +45,7 @@ pub fn frame_header(input: &[u8]) -> IResult<&[u8], FrameHeader> {
     Ok((remaining, header))
 }
 
-pub fn frame_body(header: FrameHeader) -> impl Fn(&[u8]) -> IResult<&[u8], FrameBody> {
+pub fn frame_body<'a>(header: FrameHeader) -> impl Fn(&'a[u8]) -> IResult<&'a[u8], FrameBody<'a>> {
     move |input: &[u8]| {
         let (remaining, (data, crc)) = sequence::tuple((
             bytes::streaming::take::<u16, &[u8], nom::error::Error<&[u8]>>(header.n_bytes),
@@ -66,9 +69,12 @@ pub fn frame_body(header: FrameHeader) -> impl Fn(&[u8]) -> IResult<&[u8], Frame
 }
 
 pub fn frame(input: &[u8]) -> IResult<&[u8], Frame> {
-    let body_parser = combinator::flat_map(frame_header, frame_body);
-    let (remaining, (header, body, _)) =
-        tuple((frame_header, body_parser, ascii_char(AsciiChar::ETX)))(input)?;
+    //let body_parser = combinator::flat_map(combinator::peek(frame_header), frame_body);
+    //let (remaining, (header, body, _)) =
+    //    tuple((frame_header, body_parser, ascii_char(AsciiChar::ETX)))(input)?;
+    let (remaining,header) = frame_header(input)?;
+    //let header = Rc::new(header);
+    let (remaining,body) = terminated(frame_body(header.clone()), ascii_char(AsciiChar::ETX))(remaining)?;
     Ok((remaining, Frame::new_unchecked(header, body)))
 }
 
