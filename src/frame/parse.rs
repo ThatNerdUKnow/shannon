@@ -5,10 +5,13 @@ use nom::bytes;
 use nom::error::ErrorKind;
 use nom::number;
 use nom::sequence;
+use nom::sequence::tuple;
 use nom::IResult;
+use nom::combinator;
 
 use crate::frame::FrameError;
 
+use super::Frame;
 use super::FrameBody;
 use super::FrameHeader;
 
@@ -40,23 +43,31 @@ pub fn frame_header(input: &[u8]) -> IResult<&[u8], FrameHeader> {
     Ok((remaining, header))
 }
 
-pub fn frame_body(input: &[u8], header: FrameHeader) -> IResult<&[u8], FrameBody> {
-    let (remaining, (data, crc)) = sequence::tuple((
-        bytes::streaming::take::<u16, &[u8], nom::error::Error<&[u8]>>(header.n_bytes),
-        number::streaming::be_u32,
-    ))(input)?;
+pub fn frame_body(header: FrameHeader) -> impl Fn(&[u8]) -> IResult<&[u8], FrameBody> {
+    move |input: &[u8]| {
+        let (remaining, (data, crc)) = sequence::tuple((
+            bytes::streaming::take::<u16, &[u8], nom::error::Error<&[u8]>>(header.n_bytes),
+            number::streaming::be_u32,
+        ))(input)?;
 
-    match FrameBody::new_checked(data, crc) {
-        Ok(body) => Ok((remaining, body)),
-        Err(err) => match err {
-            FrameError::Crc32(_, _) => {
-                error!("{err}");
-                Err(nom::Err::Error(nom::error::Error::new(
-                    input,
-                    ErrorKind::Verify,
-                )))
-            }
-            _ => unreachable!(),
-        },
+        match FrameBody::new_checked(data, crc) {
+            Ok(body) => Ok((remaining, body)),
+            Err(err) => match err {
+                FrameError::Crc32(_, _) => {
+                    error!("{err}");
+                    Err(nom::Err::Error(nom::error::Error::new(
+                        input,
+                        ErrorKind::Verify,
+                    )))
+                }
+                _ => unreachable!(),
+            },
+        }
     }
+}
+
+pub fn frame(input: &[u8]) -> IResult<&[u8],Frame>{
+    let body_parser = combinator::flat_map(frame_header, frame_body);
+    let (remaining,(header,body)) = tuple((frame_header,body_parser))(input)?;
+    Ok((remaining,Frame::new_unchecked(header, body)))
 }

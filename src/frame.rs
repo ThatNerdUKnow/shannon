@@ -9,9 +9,18 @@ pub struct Frame<'a> {
     //n_bytes: u16,
     //target_user_id: u64,
     header: FrameHeader,
-    body:FrameBody<'a>
-    //body: &'a [u8],
-    //crc32: u32,
+    body: FrameBody<'a>, //body: &'a [u8],
+                         //crc32: u32,
+}
+
+impl<'a> Frame<'a>{
+    /// Creates new [`Frame`] but does not verify that [`FrameHeader`] indicates correct number of bytes in the body
+    /// or [`FrameBody`] has appropriate crc32 value
+    pub fn new_unchecked(header:FrameHeader, body:FrameBody)->Frame<'_>{
+        Frame{
+            header,body
+        }
+    }
 }
 
 pub struct FrameHeader {
@@ -19,23 +28,31 @@ pub struct FrameHeader {
     target_user_id: u64,
 }
 
-pub struct FrameBody<'a>{
-    body: &'a[u8],
-    crc32:u32
+pub struct FrameBody<'a> {
+    body: &'a [u8],
+    crc32: u32,
 }
 
-impl FrameBody<'_>{
+impl FrameBody<'_> {
     /// Create new [`FrameBody`] with manual crc32 value. Provided crc32 is checked against the computed
     /// crc32 value for data
-    pub fn new_checked(data:&[u8],crc32:u32)->Result<FrameBody,FrameError>{
+    pub fn new_checked(data: &[u8], crc32: u32) -> Result<FrameBody, FrameError> {
         let calc_crc = const_crc32::crc32(data);
-        if calc_crc != crc32{
-            return Err(FrameError::Crc32(calc_crc, crc32))
+        if calc_crc != crc32 {
+            return Err(FrameError::Crc32(calc_crc, crc32));
         }
-        Ok(FrameBody{
-            body:data,
-            crc32
-        })
+        Ok(FrameBody::new_unchecked(data, crc32))
+    }
+
+    /// Creates new [`FrameBody`] but does not verify provided crc32 value
+    pub fn new_unchecked(data: &[u8], crc32: u32) -> FrameBody {
+        FrameBody { body: data, crc32 }
+    }
+
+    /// Creates new [`FrameBody`] and automatically calculates crc32 value
+    pub fn new(data:&[u8])->FrameBody{
+        let crc = const_crc32::crc32(data);
+        FrameBody::new_unchecked(data, crc)
     }
 }
 
@@ -53,9 +70,8 @@ pub enum FrameError {
     #[error("I/O Based Error")]
     IO(#[from] io::Error),
     #[error("CRC32 Mismatch. Calculated {0} but got {1}")]
-    Crc32(u32,u32)
+    Crc32(u32, u32),
 }
-
 
 impl<'a> TryFrom<Frame<'a>> for Vec<u8> {
     type Error = FrameError;
