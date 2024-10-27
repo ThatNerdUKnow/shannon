@@ -10,8 +10,8 @@ use nom::sequence;
 use nom::sequence::terminated;
 use nom::IResult;
 
-use crate::frame::FrameError;
 
+use super::error::FrameError;
 use super::Frame;
 use super::FrameBody;
 use super::FrameHeader;
@@ -48,7 +48,7 @@ pub fn frame_body<'a>(
 ) -> impl Fn(&'a [u8]) -> IResult<&'a [u8], FrameBody> {
     move |input: &[u8]| {
         let (remaining, (data, crc)) = sequence::tuple((
-            bytes::streaming::take::<u16, &[u8], nom::error::Error<&[u8]>>(header.n_bytes),
+            bytes::streaming::take::<u16, &[u8], nom::error::Error<&[u8]>>(header.n_bytes()),
             number::streaming::be_u32,
         ))(input)?;
 
