@@ -1,15 +1,13 @@
-use std::rc::Rc;
+use std::io::Read;
 
 use ascii::AsciiChar;
 use ascii::ToAsciiChar;
 use log::error;
 use nom::bytes;
-use nom::combinator;
 use nom::error::ErrorKind;
 use nom::number;
 use nom::sequence;
 use nom::sequence::terminated;
-use nom::sequence::tuple;
 use nom::IResult;
 
 use crate::frame::FrameError;
@@ -45,7 +43,9 @@ pub fn frame_header(input: &[u8]) -> IResult<&[u8], FrameHeader> {
     Ok((remaining, header))
 }
 
-pub fn frame_body<'a>(header: FrameHeader) -> impl Fn(&'a[u8]) -> IResult<&'a[u8], FrameBody<'a>> {
+pub fn frame_body<'a>(
+    header: FrameHeader,
+) -> impl Fn(&'a [u8]) -> IResult<&'a [u8], FrameBody> {
     move |input: &[u8]| {
         let (remaining, (data, crc)) = sequence::tuple((
             bytes::streaming::take::<u16, &[u8], nom::error::Error<&[u8]>>(header.n_bytes),
@@ -69,25 +69,22 @@ pub fn frame_body<'a>(header: FrameHeader) -> impl Fn(&'a[u8]) -> IResult<&'a[u8
 }
 
 pub fn frame(input: &[u8]) -> IResult<&[u8], Frame> {
-    //let body_parser = combinator::flat_map(combinator::peek(frame_header), frame_body);
-    //let (remaining, (header, body, _)) =
-    //    tuple((frame_header, body_parser, ascii_char(AsciiChar::ETX)))(input)?;
-    let (remaining,header) = frame_header(input)?;
-    //let header = Rc::new(header);
-    let (remaining,body) = terminated(frame_body(header.clone()), ascii_char(AsciiChar::ETX))(remaining)?;
+    let (remaining, header) = frame_header(input)?;
+    let (remaining, body) =
+        terminated(frame_body(header.clone()), ascii_char(AsciiChar::ETX))(remaining)?;
     Ok((remaining, Frame::new_unchecked(header, body)))
 }
 
 #[cfg(test)]
 mod test {
-    use rand::{rngs::ThreadRng, thread_rng, Rng};
+    use rand::{thread_rng, Rng};
 
     use crate::frame::Frame;
-    const BUF_SIZE: usize = 4;
+    const BUF_SIZE: usize = 4096;
     fn rand_buf() -> [u8; BUF_SIZE] {
         let mut rng = rand::thread_rng();
         let mut data: [u8; BUF_SIZE] = [0; BUF_SIZE];
-        //rng.fill(&mut data);
+        rng.fill(&mut data);
         data
     }
 

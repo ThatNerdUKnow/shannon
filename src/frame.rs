@@ -7,22 +7,33 @@ use thiserror::Error;
 pub mod parse;
 
 #[derive(Clone, PartialEq, Debug)]
-pub struct Frame<'a> {
+pub struct Frame {
     //n_bytes: u16,
     //target_user_id: u64,
     header: FrameHeader,
-    body: FrameBody<'a>, //body: &'a [u8],
-                         //crc32: u32,
+    body: FrameBody, //body: &'a [u8],
+                     //crc32: u32,
+}
+#[derive(Clone, PartialEq, Debug)]
+pub struct FrameHeader {
+    n_bytes: u16,
+    target_user_id: u64,
 }
 
-impl<'a> Frame<'a> {
+#[derive(Clone, PartialEq, Debug)]
+pub struct FrameBody {
+    body: Vec<u8>,
+    crc32: u32,
+}
+
+impl Frame {
     /// Creates new [`Frame`] but does not verify that [`FrameHeader`] indicates correct number of bytes in the body
     /// or [`FrameBody`] has appropriate crc32 value
-    pub fn new_unchecked(header: FrameHeader, body: FrameBody) -> Frame<'_> {
+    pub fn new_unchecked(header: FrameHeader, body: FrameBody) -> Frame {
         Frame { header, body }
     }
 
-    pub fn new(data: &[u8], user_id: u64) -> Result<Frame<'_>, FrameError> {
+    pub fn new(data: &[u8], user_id: u64) -> Result<Frame, FrameError> {
         let header = FrameHeader::new(data, user_id)?;
         let body = FrameBody::new(data);
         Ok(Frame { header, body })
@@ -41,19 +52,7 @@ impl<'a> Frame<'a> {
     }
 }
 
-#[derive(Clone, PartialEq, Debug)]
-pub struct FrameHeader {
-    n_bytes: u16,
-    target_user_id: u64,
-}
-
-#[derive(Clone, PartialEq, Debug)]
-pub struct FrameBody<'a> {
-    body: &'a [u8],
-    crc32: u32,
-}
-
-impl FrameBody<'_> {
+impl FrameBody {
     /// Create new [`FrameBody`] with manual crc32 value. Provided crc32 is checked against the computed
     /// crc32 value for data
     pub fn new_checked(data: &[u8], crc32: u32) -> Result<FrameBody, FrameError> {
@@ -66,7 +65,10 @@ impl FrameBody<'_> {
 
     /// Creates new [`FrameBody`] but does not verify provided crc32 value
     pub fn new_unchecked(data: &[u8], crc32: u32) -> FrameBody {
-        FrameBody { body: data, crc32 }
+        FrameBody {
+            body: Vec::from(data),
+            crc32,
+        }
     }
 
     /// Creates new [`FrameBody`] and automatically calculates crc32 value
@@ -102,11 +104,10 @@ pub enum FrameError {
     BodySize(usize),
 }
 
-impl<'a> TryFrom<Frame<'a>> for Vec<u8> {
+impl TryFrom<Frame> for Vec<u8> {
     type Error = FrameError;
 
-    fn try_from(frame: Frame<'a>) -> Result<Self, Self::Error> {
-        let bytes_required = frame.bytes_required();
+    fn try_from(frame: Frame) -> Result<Self, Self::Error> {
 
         let mut data = vec![0; 0];
 
@@ -114,7 +115,7 @@ impl<'a> TryFrom<Frame<'a>> for Vec<u8> {
         data.write_all(&frame.header.n_bytes.to_be_bytes())?;
         data.write_all(&frame.header.target_user_id.to_be_bytes())?;
         data.write_all(&[AsciiChar::SOX as u8])?;
-        data.write_all(frame.body.body)?;
+        data.write_all(&frame.body.body)?;
         data.write_all(&frame.body.crc32.to_be_bytes())?;
         data.write_all(&[AsciiChar::ETX as u8])?;
         Ok(data)
@@ -135,7 +136,7 @@ mod test {
         let frame = Frame::new(&[0; 64], 0).expect("Could not build frame");
         let v: Vec<u8> = frame.clone().try_into().expect("Could not serialize frame");
         println!("Written bytes length does not match expected");
-        assert_eq!(v.len(),frame.bytes_required());
+        assert_eq!(v.len(), frame.bytes_required());
     }
 
     #[test]
