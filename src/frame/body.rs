@@ -33,13 +33,13 @@ impl FrameBody {
         FrameBody::new_unchecked(data, crc)
     }
 
-    pub fn write(&self, writer: &mut impl io::Write) -> Result<(), io::Error> {
+    pub fn write_raw(&self,writer:&mut impl io::Write)->Result<(),io::Error>{
         writer.write_all(&self.body)?;
         writer.write_all(&self.crc32.to_be_bytes())?;
         Ok(())
     }
 
-    pub fn write_body(&self, writer: &mut impl io::Write) -> Result<(), io::Error> {
+    pub fn write_body(&self,writer:&mut impl io::Write)->Result<(),io::Error>{
         writer.write_all(&self.body)
     }
 }

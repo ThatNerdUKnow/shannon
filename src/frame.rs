@@ -47,9 +47,9 @@ impl Frame {
 
     fn write_frame(&self, data: &mut impl io::Write) -> Result<(), FrameError> {
         data.write_all(&[AsciiChar::SOH as u8])?;
-        self.header.write(data)?;
+        self.header.write_raw(data)?;
         data.write_all(&[AsciiChar::SOX as u8])?;
-        self.body.write(data)?;
+        self.body.write_raw(data)?;
         data.write_all(&[AsciiChar::ETX as u8])?;
         Ok(())
     }
