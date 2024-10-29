@@ -27,19 +27,23 @@ impl FrameBody {
         }
     }
 
+    pub fn body(&self) -> &[u8] {
+        &self.body
+    }
+
     /// Creates new [`FrameBody`] and automatically calculates crc32 value
     pub fn new(data: &[u8]) -> FrameBody {
         let crc = const_crc32::crc32(data);
         FrameBody::new_unchecked(data, crc)
     }
 
-    pub fn write_raw(&self,writer:&mut impl io::Write)->Result<(),io::Error>{
+    pub fn write_raw(&self, writer: &mut impl io::Write) -> Result<(), io::Error> {
         writer.write_all(&self.body)?;
         writer.write_all(&self.crc32.to_be_bytes())?;
         Ok(())
     }
 
-    pub fn write_body(&self,writer:&mut impl io::Write)->Result<(),io::Error>{
+    pub fn write_body(&self, writer: &mut impl io::Write) -> Result<(), io::Error> {
         writer.write_all(&self.body)
     }
 }
