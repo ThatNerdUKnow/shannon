@@ -1,9 +1,12 @@
-use std::io;
+use std::{
+    collections::VecDeque, io::{self, Read, Write}, sync::{mpsc::{self, Receiver}, Arc, Mutex}, thread
+};
 
 use ascii::AsciiChar;
 use body::FrameBody;
 use error::FrameError;
 use header::FrameHeader;
+use log::warn;
 pub mod body;
 pub mod error;
 pub mod header;
@@ -57,6 +60,38 @@ impl Frame {
     fn write_body(&self, data: &mut impl io::Write) -> Result<(), FrameError> {
         self.body.write_body(data)?;
         Ok(())
+    }
+
+    /// Write the contents of a reader into (potentially many) frames
+    pub fn write<T:Read+Send+Sync+'static>(mut reader: T, user_id: u64) -> Receiver<Frame> {
+        let (tx, rx) = mpsc::channel::<Frame>();
+        thread::spawn(move || {
+            let mut buf: Vec<u8> = vec![0; u16::MAX as usize];
+            while let Ok(count) = reader.read_to_end(&mut buf) {
+                if count == 0 {
+                    break;
+                }
+
+                let frame = match Frame::new(&buf[0..count], user_id) {
+                    Ok(f) => f,
+                    Err(e) => {
+                        log::error!("{e}");
+                        break;
+                    }
+                };
+
+                if tx.send(frame).is_err() {
+                    break;
+                }
+            }
+        });
+        rx
+    }
+
+    
+
+    pub fn read_from_stream(){
+
     }
 }
 

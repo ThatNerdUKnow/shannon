@@ -23,6 +23,10 @@ impl FrameHeader {
         }
     }
 
+    pub fn user_id(&self)->u64{
+        self.target_user_id
+    }
+
     pub fn write_raw(&self,writer:&mut impl io::Write)->Result<(),io::Error>{
         writer.write_all(&self.n_bytes.to_be_bytes())?;
         writer.write_all(&self.target_user_id.to_be_bytes())?;
