@@ -84,6 +84,7 @@ impl Frame {
     /// Write the contents of a reader into (potentially many) frames
     pub fn write<T: Read + Send + Sync + 'static>(mut reader: T, user_id: u64) -> Receiver<Frame> {
         let (tx, rx) = mpsc::channel::<Frame>();
+        info!("Spawning thread");
         thread::spawn(move || {
             let mut flex_buf: Vec<u8> = vec![0; 0];
             let mut buf = [0; u16::MAX as usize];
@@ -110,6 +111,7 @@ impl Frame {
                 Frame::flush_frame(buf_len, user_id, &mut flex_buf, &tx).inspect_err(|e|error!("{e}")).unwrap();
             }
         });
+        debug!("Returned rx");
         rx
     }
 
@@ -167,7 +169,7 @@ mod test {
     #[test]
     fn recover_many_frames() {
         init();
-        let buf: VecDeque<u8> = VecDeque::from(vec![0x0f; (u16::MAX as usize)*30]);
+        let buf: VecDeque<u8> = VecDeque::from(vec![0x0f; (u32::MAX as usize)]);
         let user_id: u64 = thread_rng().gen();
         let rx = Frame::write(buf.clone(), user_id);
         let mut rdr = Frame::read_body_from_stream(rx, user_id);
