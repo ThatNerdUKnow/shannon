@@ -9,19 +9,19 @@ use log::{debug, error, info, warn};
 use super::Frame;
 
 pub struct FrameReader {
-    rx: Receiver<Frame>,
+    rx: Receiver<Option<Frame>>,
     buf: VecDeque<u8>,
     user_id: u64,
-    frame_count:usize
+    frame_count: usize,
 }
 
 impl FrameReader {
-    pub fn new(rx: Receiver<Frame>, user_id: u64) -> FrameReader {
+    pub fn new(rx: Receiver<Option<Frame>>, user_id: u64) -> FrameReader {
         FrameReader {
             rx,
             user_id,
             buf: VecDeque::new(),
-            frame_count:0
+            frame_count: 0,
         }
     }
 }
@@ -29,11 +29,14 @@ impl FrameReader {
 impl Read for FrameReader {
     fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
         match self.rx.recv() {
-            Ok(frame) => {
+            Ok(Some(frame)) => {
                 let frame_uid = frame.header.user_id();
                 if frame_uid == self.user_id {
-                    self.frame_count +=1;
-                    debug!("Recieved frame #{} for user id {}",self.frame_count,self.user_id);
+                    self.frame_count += 1;
+                    debug!(
+                        "Recieved frame #{} for user id {}",
+                        self.frame_count, self.user_id
+                    );
                     frame.write_body(&mut self.buf)?;
                     self.buf.read(buf)
                 } else {
@@ -46,6 +49,10 @@ impl Read for FrameReader {
                         format!("skipped frame with user id {frame_uid}"),
                     ))
                 }
+            }
+            Ok(None) => {
+                info!("Rx stream ended for user id{}", self.user_id);
+                Ok(0)
             }
             Err(e) => {
                 warn!("{e}");

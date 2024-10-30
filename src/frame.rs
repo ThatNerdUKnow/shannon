@@ -73,17 +73,17 @@ impl Frame {
         n_bytes: usize,
         user_id: u64,
         buf: &mut Vec<u8>,
-        tx: &Sender<Frame>,
+        tx: &Sender<Option<Frame>>,
     ) -> Result<(), FrameError> {
         let drain:Vec<u8> = buf.drain(0..n_bytes).collect();
         let frame = Frame::new(&drain, user_id)?;
 
-        Ok(tx.send(frame)?)
+        Ok(tx.send(Some(frame))?)
     }
 
     /// Write the contents of a reader into (potentially many) frames
-    pub fn write<T: Read + Send + Sync + 'static>(mut reader: T, user_id: u64) -> Receiver<Frame> {
-        let (tx, rx) = mpsc::channel::<Frame>();
+    pub fn write<T: Read + Send + Sync + 'static>(mut reader: T, user_id: u64) -> Receiver<Option<Frame>> {
+        let (tx, rx) = mpsc::channel::<Option<Frame>>();
         info!("Spawning thread");
         thread::spawn(move || {
             let mut flex_buf: Vec<u8> = vec![0; 0];
@@ -115,7 +115,7 @@ impl Frame {
         rx
     }
 
-    pub fn read_body_from_stream(rx: Receiver<Frame>, user_id: u64) -> impl io::Read {
+    pub fn read_body_from_stream(rx: Receiver<Option<Frame>>, user_id: u64) -> impl io::Read {
         FrameReader::new(rx, user_id)
     }
 }
@@ -163,13 +163,13 @@ mod test {
         let rx = Frame::write(buf.clone(), user_id);
         let recovered = rx.recv().expect("Expected at least one frame");
 
-        assert_eq!(&buf, &recovered.body.body());
+        assert_eq!(&buf, &recovered.unwrap().body.body());
     }
 
     #[test]
     fn recover_many_frames() {
         init();
-        let buf: VecDeque<u8> = VecDeque::from(vec![0x0f; (u32::MAX as usize)]);
+        let buf: VecDeque<u8> = VecDeque::from(vec![0x0f; (u16::MAX as usize)*30]);
         let user_id: u64 = thread_rng().gen();
         let rx = Frame::write(buf.clone(), user_id);
         let mut rdr = Frame::read_body_from_stream(rx, user_id);
