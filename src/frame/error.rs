@@ -13,5 +13,5 @@ pub enum FrameError {
     #[error("Body size is too big. u16::MAX < {0}")]
     BodySize(usize),
     #[error("{0}")]
-    Send(#[from] SendError<Option<Frame>>)
+    Send(#[from] SendError<Frame>)
 }

@@ -9,14 +9,14 @@ use log::{debug, error, info, trace, warn, Level};
 use super::Frame;
 
 pub struct FrameReader {
-    rx: Receiver<Option<Frame>>,
+    rx: Receiver<Frame>,
     buf: VecDeque<u8>,
     user_id: u64,
     frame_count: usize,
 }
 
 impl FrameReader {
-    pub fn new(rx: Receiver<Option<Frame>>, user_id: u64) -> FrameReader {
+    pub fn new(rx: Receiver<Frame>, user_id: u64) -> FrameReader {
         FrameReader {
             rx,
             user_id,
@@ -30,7 +30,7 @@ impl Read for FrameReader {
     fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
         debug!("Reading {} bytes from buf",buf.len());
         match self.rx.recv() {
-            Ok(Some(frame)) => {
+            Ok(frame) => {
                 let frame_uid = frame.header.user_id();
                 if frame_uid == self.user_id {
                     self.frame_count += 1;
@@ -54,10 +54,6 @@ impl Read for FrameReader {
                         format!("skipped frame with user id {frame_uid}"),
                     ))
                 }
-            }
-            Ok(None) => {
-                info!("Rx stream ended for user id{}", self.user_id);
-                Ok(0)
             }
             Err(e) => {
                 debug!("{e}");

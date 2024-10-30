@@ -73,17 +73,17 @@ impl Frame {
         n_bytes: usize,
         user_id: u64,
         buf: &mut Vec<u8>,
-        tx: &Sender<Option<Frame>>,
+        tx: &Sender<Frame>,
     ) -> Result<(), FrameError> {
         let drain:Vec<u8> = buf.drain(0..n_bytes).collect();
         let frame = Frame::new(&drain, user_id)?;
 
-        Ok(tx.send(Some(frame))?)
+        Ok(tx.send(frame)?)
     }
 
     /// Write the contents of a reader into (potentially many) frames
-    pub fn write<T: Read + Send + Sync + 'static>(mut reader: T, user_id: u64) -> (Sender<Option<Frame>>,Receiver<Option<Frame>>) {
-        let (tx, rx) = mpsc::channel::<Option<Frame>>();
+    pub fn write<T: Read + Send + Sync + 'static>(mut reader: T, user_id: u64) -> Receiver<Frame> {
+        let (tx, rx) = mpsc::channel::<Frame>();
         let thread_tx = tx.clone();
         info!("Spawning thread");
         thread::spawn(move || {
@@ -111,7 +111,7 @@ impl Frame {
                     Frame::flush_frame(u16::MAX as usize, user_id, &mut flex_buf, &thread_tx).inspect_err(|e|error!("{e}")).unwrap();
                 }
             }
-            debug!("{} bytes remining in flex_buf",flex_buf.len());
+            error!("{} bytes remining in flex_buf",flex_buf.len());
             // flush the rest of the frame buffer
             while !flex_buf.is_empty(){
                 let buf_len = min(u16::MAX as usize, flex_buf.len());
@@ -119,10 +119,10 @@ impl Frame {
             }
         });
         debug!("Returned rx");
-        (tx,rx)
+        rx
     }
 
-    pub fn read_body_from_stream(rx: Receiver<Option<Frame>>, user_id: u64) -> impl io::Read {
+    pub fn read_body_from_stream(rx: Receiver<Frame>, user_id: u64) -> impl io::Read {
         FrameReader::new(rx, user_id)
     }
 }
@@ -170,7 +170,7 @@ mod test {
         let rx = Frame::write(buf.clone(), user_id);
         let recovered = rx.recv().expect("Expected at least one frame");
 
-        assert_eq!(&buf, &recovered.unwrap().body.body());
+        assert_eq!(&buf, &recovered.body.body());
     }
 
     #[test]
