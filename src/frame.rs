@@ -10,7 +10,7 @@ use body::FrameBody;
 use error::FrameError;
 use framereader::FrameReader;
 use header::FrameHeader;
-use log::{debug, error, info, warn};
+use log::{debug, error, info, trace, warn, Level};
 pub mod body;
 pub mod error;
 pub mod framereader;
@@ -82,37 +82,44 @@ impl Frame {
     }
 
     /// Write the contents of a reader into (potentially many) frames
-    pub fn write<T: Read + Send + Sync + 'static>(mut reader: T, user_id: u64) -> Receiver<Option<Frame>> {
+    pub fn write<T: Read + Send + Sync + 'static>(mut reader: T, user_id: u64) -> (Sender<Option<Frame>>,Receiver<Option<Frame>>) {
         let (tx, rx) = mpsc::channel::<Option<Frame>>();
+        let thread_tx = tx.clone();
         info!("Spawning thread");
         thread::spawn(move || {
             let mut flex_buf: Vec<u8> = vec![0; 0];
             let mut buf = [0; u16::MAX as usize];
             info!("Frame write thread for user id {user_id}");
+            let mut n_frames = 0;
             while let Ok(count) = reader.read(&mut buf) {
                 debug!("Read {count} bytes");
                 if count == 0 {
                     break;
                 }
-
+                n_frames+=1;
+                debug!("Sending frame #{n_frames}");
+                if log::max_level() == Level::Trace{
+                    let body_inspect = String::from_utf8_lossy(&buf[0..count]);
+                    trace!("{body_inspect}");
+                }
                 if flex_buf.write(&buf).is_err() {
                     warn!("Could not write to flex buf");
                     break;
                 }
 
                 if flex_buf.len() >= u16::MAX as usize {
-                    Frame::flush_frame(u16::MAX as usize, user_id, &mut flex_buf, &tx).inspect_err(|e|error!("{e}")).unwrap();
+                    Frame::flush_frame(u16::MAX as usize, user_id, &mut flex_buf, &thread_tx).inspect_err(|e|error!("{e}")).unwrap();
                 }
             }
             debug!("{} bytes remining in flex_buf",flex_buf.len());
             // flush the rest of the frame buffer
-            while flex_buf.len() > 0{
+            while !flex_buf.is_empty(){
                 let buf_len = min(u16::MAX as usize, flex_buf.len());
-                Frame::flush_frame(buf_len, user_id, &mut flex_buf, &tx).inspect_err(|e|error!("{e}")).unwrap();
+                Frame::flush_frame(buf_len, user_id, &mut flex_buf, &thread_tx).inspect_err(|e|error!("{e}")).unwrap();
             }
         });
         debug!("Returned rx");
-        rx
+        (tx,rx)
     }
 
     pub fn read_body_from_stream(rx: Receiver<Option<Frame>>, user_id: u64) -> impl io::Read {

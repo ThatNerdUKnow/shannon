@@ -4,7 +4,7 @@ use std::{
     sync::mpsc::Receiver,
 };
 
-use log::{debug, error, info, warn};
+use log::{debug, error, info, trace, warn, Level};
 
 use super::Frame;
 
@@ -28,6 +28,7 @@ impl FrameReader {
 
 impl Read for FrameReader {
     fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        debug!("Reading {} bytes from buf",buf.len());
         match self.rx.recv() {
             Ok(Some(frame)) => {
                 let frame_uid = frame.header.user_id();
@@ -38,6 +39,10 @@ impl Read for FrameReader {
                         self.frame_count, self.user_id
                     );
                     frame.write_body(&mut self.buf)?;
+                    if log::max_level() == Level::Trace{
+                        let inspect_str = String::from_utf8_lossy(buf);
+                        trace!("{inspect_str}");
+                    }
                     self.buf.read(buf)
                 } else {
                     warn!(
@@ -55,8 +60,9 @@ impl Read for FrameReader {
                 Ok(0)
             }
             Err(e) => {
-                warn!("{e}");
-                Ok(0)
+                debug!("{e}");
+                trace!("{} bytes remaining in buf",self.buf.len());
+                self.buf.read(buf)
             }
         }
     }
