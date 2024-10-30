@@ -111,7 +111,7 @@ impl Frame {
                     Frame::flush_frame(u16::MAX as usize, user_id, &mut flex_buf, &thread_tx).inspect_err(|e|error!("{e}")).unwrap();
                 }
             }
-            error!("{} bytes remining in flex_buf",flex_buf.len());
+            warn!("{} bytes remining in flex_buf",flex_buf.len());
             // flush the rest of the frame buffer
             while !flex_buf.is_empty(){
                 let buf_len = min(u16::MAX as usize, flex_buf.len());
