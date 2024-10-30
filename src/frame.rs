@@ -1,11 +1,8 @@
 use std::{
-    collections::VecDeque,
-    io::{self, Read, Write},
-    sync::{
-        mpsc::{self, Receiver},
+    cmp::min, collections::VecDeque, io::{self, Read, Write}, sync::{
+        mpsc::{self, Receiver, Sender},
         Arc, Mutex,
-    },
-    thread,
+    }, thread
 };
 
 use ascii::AsciiChar;
@@ -13,7 +10,7 @@ use body::FrameBody;
 use error::FrameError;
 use framereader::FrameReader;
 use header::FrameHeader;
-use log::{debug, info, warn};
+use log::{debug, error, info, warn};
 pub mod body;
 pub mod error;
 pub mod framereader;
@@ -72,35 +69,45 @@ impl Frame {
         Ok(())
     }
 
+    fn flush_frame(
+        n_bytes: usize,
+        user_id: u64,
+        buf: &mut Vec<u8>,
+        tx: &Sender<Frame>,
+    ) -> Result<(), FrameError> {
+        let drain:Vec<u8> = buf.drain(0..n_bytes).collect();
+        let frame = Frame::new(&drain, user_id)?;
+
+        Ok(tx.send(frame)?)
+    }
+
     /// Write the contents of a reader into (potentially many) frames
     pub fn write<T: Read + Send + Sync + 'static>(mut reader: T, user_id: u64) -> Receiver<Frame> {
         let (tx, rx) = mpsc::channel::<Frame>();
         thread::spawn(move || {
-            let mut buf = vec![0; 0];
+            let mut flex_buf: Vec<u8> = vec![0; 0];
+            let mut buf = [0; u16::MAX as usize];
             info!("Frame write thread for user id {user_id}");
-            while let Ok(count) = reader.read_to_end(&mut buf) {
-                    debug!("Read {count} bytes");
-                if buf.len() >= u16::MAX as usize || count == 0 {
-                    let n = if count == 0 {
-                        buf.len()
-                    } else {
-                        u16::MAX as usize
-                    };
-                    let frame = match Frame::new(&buf[0..n], user_id) {
-                        Ok(f) => f,
-                        Err(e) => {
-                            log::error!("{e}");
-                            break;
-                        }
-                    };
-
-                    if tx.send(frame).is_err() {
-                        break;
-                    }
-                    if count == 0 {
-                        break;
-                    }
+            while let Ok(count) = reader.read(&mut buf) {
+                debug!("Read {count} bytes");
+                if count == 0 {
+                    break;
                 }
+
+                if flex_buf.write(&buf).is_err() {
+                    warn!("Could not write to flex buf");
+                    break;
+                }
+
+                if flex_buf.len() >= u16::MAX as usize {
+                    Frame::flush_frame(u16::MAX as usize, user_id, &mut flex_buf, &tx).inspect_err(|e|error!("{e}")).unwrap();
+                }
+            }
+            debug!("{} bytes remining in flex_buf",flex_buf.len());
+            // flush the rest of the frame buffer
+            while flex_buf.len() > 0{
+                let buf_len = min(u16::MAX as usize, flex_buf.len());
+                Frame::flush_frame(buf_len, user_id, &mut flex_buf, &tx).inspect_err(|e|error!("{e}")).unwrap();
             }
         });
         rx
@@ -122,8 +129,9 @@ mod test {
 
     fn init() {
         let _ = env_logger::builder()
-        .filter_level(log::LevelFilter::Trace)
-        .is_test(true).try_init();
+            .filter_level(log::LevelFilter::Trace)
+            .is_test(true)
+            .try_init();
     }
 
     #[test]
@@ -148,7 +156,7 @@ mod test {
     #[test]
     fn channel_one_frame() {
         init();
-        let buf: VecDeque<u8> = VecDeque::from(vec![0x0f; u8::MAX as usize]);
+        let buf: VecDeque<u8> = VecDeque::from(vec![0x0f; (u16::MAX as usize)]);
         let user_id: u64 = 0x89ABCDEF;
         let rx = Frame::write(buf.clone(), user_id);
         let recovered = rx.recv().expect("Expected at least one frame");
@@ -159,8 +167,8 @@ mod test {
     #[test]
     fn recover_many_frames() {
         init();
-        let buf: VecDeque<u8> = VecDeque::from(vec![0x0f; (u8::MAX as usize) << 2]);
-        let user_id: u64 = 0x89ABCDEF;
+        let buf: VecDeque<u8> = VecDeque::from(vec![0x0f; (u16::MAX as usize)*30]);
+        let user_id: u64 = thread_rng().gen();
         let rx = Frame::write(buf.clone(), user_id);
         let mut rdr = Frame::read_body_from_stream(rx, user_id);
         let mut buf2: Vec<u8> = vec![0; 0];

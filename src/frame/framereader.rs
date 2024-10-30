@@ -48,7 +48,7 @@ impl Read for FrameReader {
                 }
             }
             Err(e) => {
-                debug!("{e}");
+                warn!("{e}");
                 Ok(0)
             }
         }
