@@ -29,6 +29,7 @@ impl FrameReader {
 impl Read for FrameReader {
     fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
         debug!("Reading {} bytes from buf",buf.len());
+        debug!("{} bytes remaining in buf",self.buf.len());
         match self.rx.recv() {
             Ok(frame) => {
                 let frame_uid = frame.header.user_id();
@@ -57,7 +58,6 @@ impl Read for FrameReader {
             }
             Err(e) => {
                 debug!("{e}");
-                trace!("{} bytes remaining in buf",self.buf.len());
                 self.buf.read(buf)
             }
         }
