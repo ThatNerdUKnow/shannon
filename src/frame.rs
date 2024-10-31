@@ -1,8 +1,12 @@
 use std::{
-    cmp::min, collections::VecDeque, io::{self, Read, Write}, sync::{
+    cmp::min,
+    collections::VecDeque,
+    io::{self, Read, Write},
+    sync::{
         mpsc::{self, Receiver, Sender},
         Arc, Mutex,
-    }, thread
+    },
+    thread,
 };
 
 use ascii::AsciiChar;
@@ -74,8 +78,12 @@ impl Frame {
         user_id: u64,
         buf: &mut Vec<u8>,
         tx: &Sender<Frame>,
+        n_frames: &mut usize,
     ) -> Result<(), FrameError> {
-        let drain:Vec<u8> = buf.drain(0..n_bytes).collect();
+        let drain: Vec<u8> = buf.drain(0..n_bytes).collect();
+        *n_frames += 1;
+        info!("Sending frame #{n_frames} ({n_bytes} bytes) for user {user_id}");
+
         let frame = Frame::new(&drain, user_id)?;
 
         Ok(tx.send(frame)?)
@@ -91,23 +99,37 @@ impl Frame {
             let mut buf = [0; u16::MAX as usize];
             info!("Frame write thread for user id {user_id}");
             let mut n_frames = 0;
-            
-            while let Ok(count) = reader.read(&mut buf){
+
+            while let Ok(count) = reader.read(&mut buf) {
                 debug!("Read {count} bytes from reader");
-                if count == 0{
+                if count == 0 {
                     break;
                 }
 
-                flex_buf.write_all(&buf[0..count]).expect("Couldn't write to flex_buf");
+                flex_buf
+                    .write_all(&buf[0..count])
+                    .expect("Couldn't write to flex_buf");
 
-                
+                if flex_buf.len() >= u16::MAX as usize {
+                    Frame::flush_frame(
+                        u16::MAX as usize,
+                        user_id,
+                        &mut flex_buf,
+                        &thread_tx,
+                        &mut n_frames,
+                    )
+                    .inspect_err(|e| error!("{e}"))
+                    .unwrap();
+                }
             }
 
-            warn!("{} bytes remining in flex_buf",flex_buf.len());
+            warn!("{} bytes remining in flex_buf", flex_buf.len());
             // flush the rest of the frame buffer
-            while !flex_buf.is_empty(){
+            while !flex_buf.is_empty() {
                 let buf_len = min(u16::MAX as usize, flex_buf.len());
-                Frame::flush_frame(buf_len, user_id, &mut flex_buf, &thread_tx).inspect_err(|e|error!("{e}")).unwrap();
+                Frame::flush_frame(buf_len, user_id, &mut flex_buf, &thread_tx, &mut n_frames)
+                    .inspect_err(|e| error!("{e}"))
+                    .unwrap();
             }
         });
         debug!("Returned rx");
@@ -168,13 +190,13 @@ mod test {
     #[test]
     fn recover_many() {
         init();
-        let buf= include_bytes!(".././examples/moby.txt");
+        let buf = include_bytes!(".././examples/moby.txt");
         let user_id: u64 = thread_rng().gen();
         let rx = Frame::write(&buf[..], user_id);
         let mut rdr = Frame::read_body_from_stream(rx, user_id);
         let mut buf2: Vec<u8> = vec![0; 0];
         rdr.read_to_end(&mut buf2).expect("Buf read failed");
-        assert_eq!(buf.len(),buf2.len());
+        assert_eq!(buf.len(), buf2.len());
         assert_eq!(&buf[..], &buf2);
     }
 }
