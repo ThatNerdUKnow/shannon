@@ -5,11 +5,11 @@ use rand::{thread_rng, Rng};
 use shannon::frame::Frame;
 
 pub fn main() {
-    env_logger::init();
+    init();
     info!("Starting");
-    let input = fs::File::open("./examples/moby.txt").unwrap();
+    let input = fs::File::open("./examples/berserk-ref.mkv").unwrap();
     let buf = BufReader::new(input);
-    let  f = fs::File::create("./examples/out.txt").unwrap();
+    let  f = fs::File::create("./examples/out.mkv").unwrap();
     let mut buf2 = BufWriter::new(f);
     let user_id: u64 = thread_rng().gen();
     info!("Writing frames to channel");
@@ -22,8 +22,9 @@ pub fn main() {
 }
 
 fn init() {
+    let stdout = BufWriter::with_capacity(u16::MAX as usize, io::stdout());
     let _ = env_logger::builder()
         .filter_level(log::LevelFilter::Info)
-        .is_test(true)
+        .target(env_logger::Target::Pipe(Box::new(stdout)))
         .try_init();
 }

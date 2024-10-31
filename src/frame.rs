@@ -16,13 +16,13 @@ use error::FrameError;
 use framereader::FrameReader;
 use header::FrameHeader;
 use log::{debug, error, info, trace, warn, Level};
+pub mod alias;
 pub mod body;
 pub mod error;
 pub mod framereader;
 pub mod header;
 mod impls;
 pub mod parse;
-pub mod alias;
 
 #[derive(Clone, PartialEq, Debug)]
 pub struct Frame {
@@ -93,11 +93,11 @@ impl Frame {
 
     /// Write the contents of a reader into (potentially many) frames
     pub fn write<T: Read + Send + Sync + 'static>(mut reader: T, user_id: u64) -> Receiver<Frame> {
-        #[cfg(feature="sync_frame_channel")]
-        let (tx, rx) = mpsc::sync_channel::<Frame>(1024);
-        #[cfg(not(feature="sync_frame_channel"))]
+        #[cfg(feature = "sync_frame_channel")]
+        let (tx, rx) = mpsc::sync_channel::<Frame>(2048);
+        #[cfg(not(feature = "sync_frame_channel"))]
         let (tx, rx) = mpsc::channel::<Frame>();
-        
+
         let thread_tx = tx.clone();
         info!("Spawning thread");
         thread::spawn(move || {
@@ -116,9 +116,11 @@ impl Frame {
                     .write_all(&buf[0..count])
                     .expect("Couldn't write to flex_buf");
 
-                if flex_buf.len() >= u16::MAX as usize {
+                while flex_buf.len() >= u16::MAX as usize {
+                    let len_to_write = min(flex_buf.len(), u16::MAX as usize);
+                    assert!(len_to_write >= u16::MAX as usize);
                     Frame::flush_frame(
-                        u16::MAX as usize,
+                        len_to_write,
                         user_id,
                         &mut flex_buf,
                         &thread_tx,
