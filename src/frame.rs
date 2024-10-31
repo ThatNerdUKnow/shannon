@@ -168,13 +168,13 @@ mod test {
     #[test]
     fn recover_many() {
         init();
-        let buf= &include_bytes!(".././examples/moby.txt")[0..32000];
+        let buf= include_bytes!(".././examples/moby.txt");
         let user_id: u64 = thread_rng().gen();
-        let rx = Frame::write(buf, user_id);
+        let rx = Frame::write(&buf[..], user_id);
         let mut rdr = Frame::read_body_from_stream(rx, user_id);
         let mut buf2: Vec<u8> = vec![0; 0];
         rdr.read_to_end(&mut buf2).expect("Buf read failed");
         assert_eq!(buf.len(),buf2.len());
-        assert_eq!(buf, &buf2);
+        assert_eq!(&buf[..], &buf2);
     }
 }
