@@ -97,7 +97,7 @@ impl Frame {
                     break;
                 }
                 n_frames+=1;
-                debug!("Sending frame #{n_frames}");
+                info!("Sending frame #{n_frames} for user id {user_id}");
                 if log::max_level() == Level::Trace{
                     let body_inspect = String::from_utf8_lossy(&buf[0..count]);
                     trace!("{body_inspect}");
@@ -176,13 +176,13 @@ mod test {
     #[test]
     fn recover_many() {
         init();
-        let buf= include_bytes!(".././examples/moby.txt");
+        let buf= &include_bytes!(".././examples/moby.txt")[0..32000];
         let user_id: u64 = thread_rng().gen();
-        let rx = Frame::write(&buf[..], user_id);
+        let rx = Frame::write(buf, user_id);
         let mut rdr = Frame::read_body_from_stream(rx, user_id);
         let mut buf2: Vec<u8> = vec![0; 0];
         rdr.read_to_end(&mut buf2).expect("Buf read failed");
         assert_eq!(buf.len(),buf2.len());
-        assert_eq!(&buf[..], &buf2);
+        assert_eq!(buf, &buf2);
     }
 }

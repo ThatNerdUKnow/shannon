@@ -25,7 +25,7 @@ pub fn main() {
 
 fn init() {
     let _ = env_logger::builder()
-        .filter_level(log::LevelFilter::Trace)
+        .filter_level(log::LevelFilter::Info)
         .is_test(true)
         .try_init();
 }

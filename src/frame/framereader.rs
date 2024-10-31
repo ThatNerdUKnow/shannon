@@ -32,7 +32,7 @@ impl Read for FrameReader {
         if buf.len() > self.buf.len() {
             if let Ok(frame) = self.rx.recv().inspect_err(|e| error!("{e}")) {
                 self.frame_count += 1;
-                debug!(
+                info!(
                     "Got frame #{} for user id {}",
                     self.frame_count, self.user_id
                 );
