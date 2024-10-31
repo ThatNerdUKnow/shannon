@@ -12,3 +12,6 @@ log = "0.4.22"
 nom = "7.1.3"
 rand = "0.8.5"
 thiserror = "1.0.65"
+
+[features]
+sync_frame_channel = []

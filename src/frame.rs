@@ -9,6 +9,7 @@ use std::{
     thread,
 };
 
+use alias::FrameSender;
 use ascii::AsciiChar;
 use body::FrameBody;
 use error::FrameError;
@@ -21,6 +22,7 @@ pub mod framereader;
 pub mod header;
 mod impls;
 pub mod parse;
+pub mod alias;
 
 #[derive(Clone, PartialEq, Debug)]
 pub struct Frame {
@@ -77,7 +79,7 @@ impl Frame {
         n_bytes: usize,
         user_id: u64,
         buf: &mut Vec<u8>,
-        tx: &Sender<Frame>,
+        tx: &FrameSender,
         n_frames: &mut usize,
     ) -> Result<(), FrameError> {
         let drain: Vec<u8> = buf.drain(0..n_bytes).collect();
@@ -91,7 +93,11 @@ impl Frame {
 
     /// Write the contents of a reader into (potentially many) frames
     pub fn write<T: Read + Send + Sync + 'static>(mut reader: T, user_id: u64) -> Receiver<Frame> {
+        #[cfg(feature="sync_frame_channel")]
+        let (tx, rx) = mpsc::sync_channel::<Frame>(1024);
+        #[cfg(not(feature="sync_frame_channel"))]
         let (tx, rx) = mpsc::channel::<Frame>();
+        
         let thread_tx = tx.clone();
         info!("Spawning thread");
         thread::spawn(move || {

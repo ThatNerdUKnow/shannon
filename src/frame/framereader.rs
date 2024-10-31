@@ -6,17 +6,17 @@ use std::{
 
 use log::{debug, error, info, trace, warn, Level};
 
-use super::Frame;
+use super::{alias::FrameReceiver, Frame};
 
 pub struct FrameReader {
-    rx: Receiver<Frame>,
+    rx: FrameReceiver,
     buf: VecDeque<u8>,
     user_id: u64,
     frame_count: usize,
 }
 
 impl FrameReader {
-    pub fn new(rx: Receiver<Frame>, user_id: u64) -> FrameReader {
+    pub fn new(rx: FrameReceiver, user_id: u64) -> FrameReader {
         FrameReader {
             rx,
             user_id,

@@ -59,6 +59,43 @@
             },
             "args": [],
             "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug example 'recover_many'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--example=recover_many",
+                    "--package=shannon"
+                ],
+                "filter": {
+                    "name": "recover_many",
+                    "kind": "example"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in example 'recover_many'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--example=recover_many",
+                    "--package=shannon"
+                ],
+                "filter": {
+                    "name": "recover_many",
+                    "kind": "example"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
         }
     ]
 }
