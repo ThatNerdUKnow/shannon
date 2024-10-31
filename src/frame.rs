@@ -91,26 +91,18 @@ impl Frame {
             let mut buf = [0; u16::MAX as usize];
             info!("Frame write thread for user id {user_id}");
             let mut n_frames = 0;
-            while let Ok(count) = reader.read(&mut buf) {
-                debug!("Read {count} bytes");
-                if count == 0 {
-                    break;
-                }
-                n_frames+=1;
-                info!("Sending frame #{n_frames} for user id {user_id}");
-                if log::max_level() == Level::Trace{
-                    let body_inspect = String::from_utf8_lossy(&buf[0..count]);
-                    trace!("{body_inspect}");
-                }
-                if flex_buf.write(&buf).is_err() {
-                    warn!("Could not write to flex buf");
+            
+            while let Ok(count) = reader.read(&mut buf){
+                debug!("Read {count} bytes from reader");
+                if count == 0{
                     break;
                 }
 
-                if flex_buf.len() >= u16::MAX as usize {
-                    Frame::flush_frame(u16::MAX as usize, user_id, &mut flex_buf, &thread_tx).inspect_err(|e|error!("{e}")).unwrap();
-                }
+                flex_buf.write_all(&buf[0..count]).expect("Couldn't write to flex_buf");
+
+                
             }
+
             warn!("{} bytes remining in flex_buf",flex_buf.len());
             // flush the rest of the frame buffer
             while !flex_buf.is_empty(){
