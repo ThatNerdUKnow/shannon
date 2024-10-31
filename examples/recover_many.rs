@@ -5,7 +5,7 @@ use rand::{thread_rng, Rng};
 use shannon::frame::Frame;
 
 pub fn main() {
-    env_logger::init();
+    init();
     info!("Starting");
     //let buf: VecDeque<u8> = VecDeque::from(vec![0x0f; (u32::MAX as usize)]);
     let f = fs::File::open("./examples/moby.txt").unwrap();
