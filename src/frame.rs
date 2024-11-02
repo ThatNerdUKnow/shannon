@@ -61,7 +61,7 @@ impl Frame {
         return bytes_required;
     }
 
-    fn write_frame(&self, data: &mut impl io::Write) -> Result<(), FrameError> {
+    fn write_frame(&self, data: &mut impl io::Write) -> Result<(), io::Error> {
         data.write_all(&[AsciiChar::SOH as u8])?;
         self.header.write_raw(data)?;
         data.write_all(&[AsciiChar::SOX as u8])?;
@@ -145,7 +145,11 @@ impl Frame {
     }
 
     pub fn read_body_from_stream(rx: Receiver<Frame>, user_id: u64) -> impl io::Read {
-        FrameReader::new(rx, user_id)
+        FrameReader::new(rx, user_id,false)
+    }
+
+    pub fn read_raw_from_stream(rx: Receiver<Frame>, user_id: u64) -> impl io::Read {
+        FrameReader::new(rx, user_id,true)
     }
 }
 

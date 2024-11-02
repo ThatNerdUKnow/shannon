@@ -13,15 +13,17 @@ pub struct FrameReader {
     buf: VecDeque<u8>,
     user_id: u64,
     frame_count: usize,
+    write_raw: bool,
 }
 
 impl FrameReader {
-    pub fn new(rx: FrameReceiver, user_id: u64) -> FrameReader {
+    pub fn new(rx: FrameReceiver, user_id: u64, write_raw: bool) -> FrameReader {
         FrameReader {
             rx,
             user_id,
             buf: VecDeque::new(),
             frame_count: 0,
+            write_raw,
         }
     }
 }
@@ -37,7 +39,11 @@ impl Read for FrameReader {
                     self.frame_count, self.user_id
                 );
                 if frame.header.user_id() == self.user_id {
-                    self.buf.write_all(frame.body.body())?;
+                    if self.write_raw {
+                        frame.write_frame(&mut self.buf)?;
+                    } else {
+                        self.buf.write_all(frame.body.body())?;
+                    }
                 }
             }
         } else {
